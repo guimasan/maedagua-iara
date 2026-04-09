@@ -34,6 +34,8 @@ Para essa versão:
 - `part = "base"` exporta a base
 - `part = "lid"` exporta a tampa
 - `show_layout_helpers = true` mostra guias de layout no preview
+- `explode_view = true` separa base e tampa no preview
+- `style_strength` controla intensidade do relevo das ondas
 
 ## Componentes previstos
 

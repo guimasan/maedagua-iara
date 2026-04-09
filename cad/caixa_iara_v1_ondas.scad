@@ -6,6 +6,9 @@ $fn = 64;
 
 part = "assembled"; // "base", "lid", "assembled"
 show_layout_helpers = false; // preview de disposição interna
+explode_view = true;         // separa base/tampa no preview para enxergar melhor
+explode_gap = 18;            // distância (mm) entre base e tampa no preview
+style_strength = 1.0;        // 1.0 = padrão, >1 ondas mais marcadas
 
 // =====================
 // Dimensões gerais
@@ -269,7 +272,7 @@ module lid_screw_holes() {
 }
 
 // ranhuras decorativas em forma de onda (relevo negativo)
-module wave_slot(y0, amp, phase, depth = 1.15, radius = 1.5) {
+module wave_slot(y0, amp, phase, depth = 2.0, radius = 2.0) {
     for (x = [14:10:outer_x - 24]) {
         x2 = x + 10;
         y1 = y0 + amp * sin((x + phase) * 2.6);
@@ -282,9 +285,11 @@ module wave_slot(y0, amp, phase, depth = 1.15, radius = 1.5) {
 }
 
 module lid_wave_pattern() {
-    wave_slot(30, 2.0, 0);
-    wave_slot(41, 2.4, 35);
-    wave_slot(52, 2.0, 70);
+    wave_slot(24, 2.0 * style_strength, 0,   2.0 * style_strength, 2.0 * style_strength);
+    wave_slot(34, 2.5 * style_strength, 25,  2.0 * style_strength, 2.0 * style_strength);
+    wave_slot(44, 2.8 * style_strength, 50,  2.1 * style_strength, 2.1 * style_strength);
+    wave_slot(54, 2.4 * style_strength, 80,  2.0 * style_strength, 2.0 * style_strength);
+    wave_slot(64, 2.0 * style_strength, 105, 1.8 * style_strength, 1.9 * style_strength);
 }
 
 module base_part() {
@@ -346,5 +351,5 @@ if (part == "lid") {
 if (part == "assembled") {
     color("#1f2937") base_part();
     layout_helpers();
-    translate([0, 0, base_h + 0.2]) color("#334155") lid_part();
+    translate([0, 0, base_h + 0.2 + (explode_view ? explode_gap : 0)]) color("#334155") lid_part();
 }
