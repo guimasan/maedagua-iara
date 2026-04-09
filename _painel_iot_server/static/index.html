@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Painel IoT Unificado</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07111f;
+        --card: #0f172a;
+        --panel-2: #111827;
+        --muted: #94a3b8;
+        --text: #e5e7eb;
+        --ok: #22c55e;
+        --accent: #38bdf8;
+        --warn: #f59e0b;
+        --bad: #ef4444;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background:
+          radial-gradient(circle at 10% 0%, #172554 0%, transparent 35%),
+          radial-gradient(circle at 90% 0%, #0f766e 0%, transparent 28%),
+          linear-gradient(180deg, var(--bg) 0%, #0b1220 100%);
+        color: var(--text);
+      }
+
+      .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 16px 40px; }
+      
+      .header {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(17, 24, 39, 0.95) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.15);
+        border-radius: 28px;
+        padding: 32px;
+        margin-bottom: 24px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+      }
+      
+      .header-top { display: flex; justify-content: space-between; align-items: start; gap: 24px; flex-wrap: wrap; }
+      
+      .title { 
+        font-size: clamp(32px, 5vw, 48px); 
+        margin: 0 0 12px;
+        background: linear-gradient(135deg, #e5e7eb 0%, #dbeafe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      
+      .sub { 
+        color: var(--muted); 
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+      }
+      
+      .dot { 
+        width: 12px; 
+        height: 12px; 
+        border-radius: 50%; 
+        background: var(--bad);
+        box-shadow: 0 0 0 5px rgba(239,68,68,0.12);
+        animation: pulse 2s infinite;
+      }
+      
+      .dot.ok { 
+        background: var(--ok);
+        box-shadow: 0 0 0 5px rgba(34,197,94,0.12);
+      }
+      
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+      }
+
+      .grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+        gap: 14px;
+      }
+      
+      .vars-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
+        gap: 12px;
+      }
+      
+      .devices-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); 
+        gap: 14px;
+      }
+
+      .card {
+        background: linear-gradient(135deg, rgba(17,24,39,0.98), rgba(15,23,42,0.96));
+        border: 1px solid rgba(56,189,248,0.12);
+        border-radius: 20px;
+        padding: 18px;
+        transition: all 0.2s ease;
+      }
+      
+      .card:hover { border-color: rgba(56,189,248,0.2); }
+
+      .device-card { 
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .device-card:hover { 
+        border-color: rgba(56,189,248,0.4);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(56,189,248,0.1);
+      }
+      
+      .device-card.active { 
+        border-color: rgba(56,189,248,0.6);
+        box-shadow: 0 0 0 1px rgba(56,189,248,0.3) inset, 0 8px 20px rgba(56,189,248,0.15);
+        background: linear-gradient(135deg, rgba(30,58,138,0.6), rgba(15,23,42,0.98));
+      }
+      
+      .label { 
+        font-size: 12px; 
+        color: var(--muted);
+        font-weight: 600;
+      }
+      
+      .value { 
+        font-size: 24px; 
+        font-weight: 700; 
+        margin-top: 8px;
+        color: #e5e7eb;
+      }
+
+      pre { 
+        white-space: pre-wrap; 
+        word-break: break-word; 
+        font-size: 12px; 
+        line-height: 1.6;
+        margin: 0;
+        padding: 14px;
+        background: rgba(7, 16, 28, 0.8);
+        border-radius: 12px;
+        border: 1px solid rgba(56,189,248,0.1);
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      
+      .chart-wrap { margin-top: 0; }
+      
+      .chart-head { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        flex-wrap: wrap;
+        gap: 14px;
+      }
+      
+      .legend { 
+        font-size: 13px; 
+        color: var(--muted);
+        font-weight: 500;
+      }
+
+      canvas {
+        width: 100%;
+        height: 320px;
+        border-radius: 18px;
+        background: rgba(7, 16, 28, 0.8);
+        border: 1px solid rgba(56,189,248,0.15);
+      }
+
+      .controls { 
+        margin-top: 0;
+        display: grid; 
+        gap: 16px;
+      }
+      
+      .control-section { 
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding-bottom: 16px;
+      }
+      
+      .control-section:last-child { border-bottom: none; }
+      
+      .control-label {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 12px;
+      }
+      
+      .row { 
+        display: flex; 
+        flex-wrap: wrap; 
+        align-items: center; 
+        gap: 10px;
+      }
+
+      button {
+        background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        border: 1px solid rgba(37, 99, 235, 0.3);
+        border-radius: 12px;
+        padding: 11px 16px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        transition: all 0.15s ease;
+      }
+      
+      button:hover { 
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+      }
+      
+      button:active { transform: translateY(0px); }
+      button.alt { 
+        background: rgba(31, 41, 55, 0.8);
+        border-color: rgba(255,255,255,0.1);
+      }
+      button.alt:hover { background: rgba(31, 41, 55, 0.95); }
+      
+      button.warn { 
+        background: linear-gradient(180deg, #ea580c 0%, #dc2305 100%);
+        border-color: rgba(234, 88, 12, 0.3);
+      }
+      button.warn:hover { box-shadow: 0 4px 12px rgba(234, 88, 12, 0.2); }
+
+      .mini-btn {
+        margin-top: 12px;
+        background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%);
+        padding: 10px 14px;
+        font-size: 13px;
+        border-radius: 12px;
+        display: inline-block;
+        color: #fff;
+        text-decoration: none;
+        border: 1px solid rgba(14, 165, 233, 0.3);
+        transition: all 0.15s ease;
+        font-weight: 600;
+      }
+      
+      .mini-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+      }
+
+      input[type="number"], select {
+        background: rgba(15, 23, 42, 0.8);
+        color: var(--text);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 12px;
+        padding: 11px 12px;
+        font-size: 13px;
+        transition: all 0.2s ease;
+      }
+      
+      input[type="number"]:focus, select:focus {
+        outline: none;
+        border-color: rgba(56, 189, 248, 0.6);
+        background: rgba(15, 23, 42, 0.95);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+      }
+      
+      input[type="number"] { width: 140px; }
+      select { min-width: 200px; }
+      
+      .section {
+        background: rgba(2, 6, 23, 0.3);
+        border: 1px solid rgba(56,189,248,0.12);
+        border-radius: 24px;
+        padding: 24px;
+        backdrop-filter: blur(4px);
+        margin-bottom: 20px;
+      }
+      
+      .section:last-child { margin-bottom: 0; }
+      
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      
+      .section-head p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      ::-webkit-scrollbar-thumb {
+        background: rgba(56, 189, 248, 0.3);
+        border-radius: 4px;
+      }
+      
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(56, 189, 248, 0.5);
+      }
+
+      @media (max-width: 1024px) {
+        .header { padding: 24px; }
+        .header-top { gap: 16px; }
+      }
+      
+      @media (max-width: 768px) {
+        .wrap { padding: 16px 12px 32px; }
+        .header { padding: 20px; }
+        .section { padding: 16px; }
+        .title { font-size: 28px; }
+        input[type="number"], select { 
+          min-width: 0;
+          flex: 1 1 140px;
+        }
+        .devices-grid { 
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="header">
+        <div class="header-top">
+          <div>
+            <h1 class="title">Painel IoT Unificado</h1>
+            <p class="sub">Controle em tempo real, calibração TDS e monitoramento de dispositivos com histórico de dados.</p>
+            <div class="status">
+              <span id="dot" class="dot"></span>
+              <span id="conn">Desconectado</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dispositivos -->
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2 style="margin: 0 0 8px; font-size: 17px; font-weight: 700;">Dispositivos Conectados</h2>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Clique em um para selecionar e controlar.</p>
+          </div>
+          <div>
+            <label class="label" for="deviceSelect" style="display: block; margin-bottom: 6px;">Seleção rápida</label>
+            <select id="deviceSelect"></select>
+          </div>
+        </div>
+        <section id="devicesGrid" class="devices-grid"></section>
+      </section>
+
+      <!-- Dados em tempo real -->
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2 style="margin: 0 0 4px; font-size: 17px; font-weight: 700;">Dados em Tempo Real</h2>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Do dispositivo selecionado.</p>
+          </div>
+        </div>
+        <div class="grid">
+          <article class="card"><div class="label">Device</div><div class="value" id="device">-</div></article>
+          <article class="card"><div class="label">Chip</div><div class="value" id="chip">-</div></article>
+          <article class="card"><div class="label">Counter</div><div class="value" id="counter">0</div></article>
+          <article class="card"><div class="label">Temp</div><div class="value" id="temp">--.- C</div></article>
+          <article class="card"><div class="label">TDS</div><div class="value" id="tds">0 ppm</div></article>
+          <article class="card"><div class="label">Uptime</div><div class="value" id="uptime">0s</div></article>
+          <article class="card"><div class="label">CAL</div><div class="value" id="cal">-</div></article>
+          <article class="card"><div class="label">CAL_GAIN</div><div class="value" id="calGain">-</div></article>
+        </div>
+      </section>
+
+      <!-- Gráfico -->
+      <section class="section chart-wrap">
+        <div class="chart-head">
+          <div>
+            <h2 style="margin: 0; font-size: 17px; font-weight: 700;">Histórico em Tempo Real</h2>
+            <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">Últimas 80 medições de TDS.</p>
+          </div>
+          <div class="legend" id="range">min 0.00 · max 0.00</div>
+        </div>
+        <canvas id="valueChart" width="1200" height="320"></canvas>
+      </section>
+
+      <!-- Controles -->
+      <section class="section controls">
+        <h2 style="margin: 0 0 16px; font-size: 17px; font-weight: 700;">Controles do Hub</h2>
+        
+        <div class="control-section">
+          <div class="control-label">Modo de Leitura</div>
+          <div class="row">
+            <label class="label" for="readModeSelect">Leitura</label>
+            <select id="readModeSelect">
+              <option value="0">0 normal</option>
+              <option value="1">1 pausa OLED durante leitura</option>
+              <option value="2">2 OLED OFF durante leitura</option>
+              <option value="3">3 OLED sempre OFF</option>
+              <option value="4">4 alternado por sensor</option>
+            </select>
+            <button id="setReadModeBtn">Aplicar</button>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <div class="control-label">Modo Display</div>
+          <div class="row">
+            <label class="label" for="displayModeSelect">Display</label>
+            <select id="displayModeSelect">
+              <option value="0">0 rotativo</option>
+              <option value="1">1 tela única</option>
+            </select>
+            <button id="setDisplayModeBtn">Aplicar</button>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <div class="control-label">Calibração TDS</div>
+          <div class="row">
+            <button id="calOnBtn">CAL ON</button>
+            <button id="calSaveBtn" class="alt">CAL SAVE</button>
+            <button id="calResetBtn" class="warn">CAL RESET</button>
+            <button id="calOffBtn" class="alt">CAL OFF</button>
+            <button id="calStatusBtn" class="alt">CAL?</button>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <div class="control-label">Aplicar PPM</div>
+          <div class="row">
+            <label class="label" for="calRefInput">Ref. PPM</label>
+            <input id="calRefInput" type="number" min="1" max="9999" value="706.5" />
+            <button id="calApplyPpmBtn">Aplicar PPM</button>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <div class="control-label">Converter EC → PPM</div>
+          <div class="row">
+            <label class="label" for="ecInput">Condutividade (µS/cm)</label>
+            <input id="ecInput" type="number" min="1" max="9999" value="1413" />
+            <label class="label" for="factorSelect">Fator</label>
+            <select id="factorSelect">
+              <option value="0.5" selected>0.5 (500 scale)</option>
+              <option value="0.64">0.64</option>
+              <option value="0.7">0.7 (700 scale)</option>
+            </select>
+          </div>
+          <div class="row" style="margin-top: 10px;">
+            <button id="calcAndApplyBtn">Converter e Aplicar</button>
+            <button id="apply1413Btn" class="alt">Preset 1413 µS/cm</button>
+          </div>
+          <div style="margin-top: 10px; padding: 12px; background: rgba(56,189,248,0.1); border-radius: 12px; border: 1px solid rgba(56,189,248,0.2);">
+            <span class="label" id="calHint">1413 µS/cm × 0.5 = 706.5 ppm</span>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <div class="control-label">Status</div>
+          <div style="padding: 12px; background: rgba(7,16,28,0.8); border-radius: 12px; border: 1px solid rgba(56,189,248,0.1);">
+            <span class="label" id="hubStatus">Hub status: aguardando...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Variáveis detectadas -->
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2 style="margin: 0 0 4px; font-size: 17px; font-weight: 700;">Variáveis Detectadas Automaticamente</h2>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Todas as chaves do último pacote.</p>
+          </div>
+        </div>
+        <section id="varsGrid" class="vars-grid"></section>
+      </section>
+
+      <!-- JSON -->
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2 style="margin: 0 0 4px; font-size: 17px; font-weight: 700;">Último Pacote JSON</h2>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Para depuração, exportação e ciência aberta.</p>
+          </div>
+        </div>
+        <pre id="raw">{}</pre>
+      </section>
+    </div>
+
+    <script>
+      const el = (id) => document.getElementById(id);
+      const devicesGridEl = el("devicesGrid");
+      const deviceSelectEl = el("deviceSelect");
+      const readModeSelectEl = el("readModeSelect");
+      const displayModeSelectEl = el("displayModeSelect");
+      const setReadModeBtn = el("setReadModeBtn");
+      const setDisplayModeBtn = el("setDisplayModeBtn");
+
+      const deviceEl = el("device");
+      const chipEl = el("chip");
+      const counterEl = el("counter");
+      const tempEl = el("temp");
+      const tdsEl = el("tds");
+      const uptimeEl = el("uptime");
+      const calEl = el("cal");
+      const calGainEl = el("calGain");
+
+      const rawEl = el("raw");
+      const dotEl = el("dot");
+      const connEl = el("conn");
+      const rangeEl = el("range");
+      const hubStatusEl = el("hubStatus");
+
+      const calOnBtn = el("calOnBtn");
+      const calSaveBtn = el("calSaveBtn");
+      const calResetBtn = el("calResetBtn");
+      const calOffBtn = el("calOffBtn");
+      const calStatusBtn = el("calStatusBtn");
+      const calApplyPpmBtn = el("calApplyPpmBtn");
+      const calcAndApplyBtn = el("calcAndApplyBtn");
+      const apply1413Btn = el("apply1413Btn");
+
+      const calRefInputEl = el("calRefInput");
+      const ecInputEl = el("ecInput");
+      const factorSelectEl = el("factorSelect");
+      const calHintEl = el("calHint");
+      const varsGridEl = el("varsGrid");
+
+      const chart = el("valueChart");
+      const ctx = chart.getContext("2d");
+
+      const devices = new Map();
+      const pointsByDevice = new Map();
+      let activeDevice = null;
+      const MAX_POINTS = 80;
+      const HIDDEN_KEYS = new Set([
+        "device","device_public_id","chip","counter","value","temp_c","tds_ppm","rssi","heap",
+        "uptime_ms","telemetry_interval_ms","hub","ts","vars","event","privacy","integration",
+        "modules","model","project","protocol",
+      ]);
+
+      const ensurePoints = (device) => {
+        if (!pointsByDevice.has(device)) pointsByDevice.set(device, []);
+        return pointsByDevice.get(device);
+      };
+
+      const formatTemp = (v) => (v === null || Number.isNaN(Number(v)) ? "--.- C" : `${Number(v).toFixed(1)} C`);
+
+      const updateCalHint = () => {
+        const ec = Number(ecInputEl.value || 1413);
+        const factor = Number(factorSelectEl.value || 0.5);
+        const ppm = ec * factor;
+        calHintEl.textContent = `${ec.toFixed(0)} µS/cm × ${factor} = ${ppm.toFixed(1)} ppm`;
+        calRefInputEl.value = ppm.toFixed(1);
+      };
+
+      const renderDeviceSelect = () => {
+        const entries = [...devices.values()].sort((a,b) => String(a.device).localeCompare(String(b.device)));
+        deviceSelectEl.innerHTML = entries.map((d) => {
+          const dev = d.device ?? "unknown";
+          const selected = dev === activeDevice ? "selected" : "";
+          return `<option value="${dev}" ${selected}>${dev}</option>`;
+        }).join("");
+      };
+
+      const renderDeviceCards = () => {
+        const entries = [...devices.values()].sort((a,b) => String(a.device).localeCompare(String(b.device)));
+        if (entries.length === 0) {
+          devicesGridEl.innerHTML = `<div class="label">Nenhum dispositivo ainda.</div>`;
+          return;
+        }
+
+        devicesGridEl.innerHTML = entries.map((d) => {
+          const dev = d.device ?? "unknown";
+          const isActive = dev === activeDevice ? "active" : "";
+          const tds = Number(d.tds_ppm ?? d.value ?? 0).toFixed(1);
+          const cal = d.cal ?? d.vars?.cal ?? "-";
+          return `
+            <article class="card device-card ${isActive}" data-device="${dev}">
+              <div class="label">${dev}</div>
+              <div class="label">${d.chip ?? "unknown"}</div>
+              <div class="label" style="margin-top:8px">Temp: ${formatTemp(d.temp_c)}</div>
+              <div class="label">TDS: ${tds} ppm</div>
+              <div class="label">CAL: ${cal}</div>
+              <a class="mini-btn" href="/device/${encodeURIComponent(dev)}">Abrir dashboard</a>
+            </article>
+          `;
+        }).join("");
+
+        document.querySelectorAll(".device-card").forEach((card) => {
+          card.addEventListener("click", () => {
+            setActiveDevice(card.dataset.device);
+          });
+        });
+      };
+
+      const drawChart = () => {
+        if (!ctx) return;
+        const points = ensurePoints(activeDevice ?? "default");
+        const w = chart.width;
+        const h = chart.height;
+        const pad = 20;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = "#1f2937";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const y = pad + ((h - pad * 2) * i) / 4;
+          ctx.beginPath();
+          ctx.moveTo(pad, y);
+          ctx.lineTo(w - pad, y);
+          ctx.stroke();
+        }
+
+        if (points.length < 2) {
+          rangeEl.textContent = "min 0.00 · max 0.00";
+          return;
+        }
+
+        let min = Math.min(...points);
+        let max = Math.max(...points);
+        if (min === max) {
+          min -= 1;
+          max += 1;
+        }
+        rangeEl.textContent = `min ${min.toFixed(2)} · max ${max.toFixed(2)}`;
+
+        const plotW = w - pad * 2;
+        const plotH = h - pad * 2;
+        const xStep = plotW / (MAX_POINTS - 1);
+
+        ctx.strokeStyle = "#22d3ee";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        points.forEach((v, i) => {
+          const x = pad + i * xStep;
+          const y = pad + (1 - (v - min) / (max - min)) * plotH;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      };
+
+      const renderDynamicVars = (data) => {
+        const allVars = { ...(data.vars ?? {}) };
+        Object.entries(data).forEach(([k, v]) => {
+          if (!HIDDEN_KEYS.has(k) && !(k in allVars)) allVars[k] = v;
+        });
+
+        const varsEntries = Object.entries(allVars)
+          .filter(([k]) => !HIDDEN_KEYS.has(k))
+          .sort(([a], [b]) => a.localeCompare(b));
+
+        if (varsEntries.length === 0) {
+          varsGridEl.innerHTML = `<div class="label">Nenhuma variável extra detectada ainda.</div>`;
+          return;
+        }
+
+        varsGridEl.innerHTML = varsEntries.map(([k, v]) => `
+          <article class="card">
+            <div class="label">${k}</div>
+            <div class="value" style="font-size:20px">${v === null ? "-" : String(v)}</div>
+          </article>
+        `).join("");
+      };
+
+      const renderActive = () => {
+        if (!activeDevice || !devices.has(activeDevice)) return;
+        const data = devices.get(activeDevice);
+
+        deviceEl.textContent = data.device ?? "-";
+        chipEl.textContent = data.chip ?? "-";
+        counterEl.textContent = data.counter ?? 0;
+        tempEl.textContent = formatTemp(data.temp_c);
+        tdsEl.textContent = `${Number(data.tds_ppm ?? data.value ?? 0).toFixed(1)} ppm`;
+
+        const uptimeMs = Number(data.uptime_ms ?? data.vars?.ts_ms ?? 0);
+        uptimeEl.textContent = `${Math.floor(uptimeMs / 1000)}s`;
+
+        const calVal = data.cal ?? data.vars?.cal;
+        const gainVal = data.cal_gain ?? data.vars?.cal_gain;
+        calEl.textContent = calVal === undefined ? "-" : String(calVal);
+        calGainEl.textContent = gainVal === undefined ? "-" : Number(gainVal).toFixed(4);
+
+        const mode = data.mode ?? data.vars?.mode;
+        if (mode !== undefined) readModeSelectEl.value = String(mode);
+        const disp = data.disp ?? data.vars?.disp;
+        if (disp !== undefined) displayModeSelectEl.value = String(disp);
+
+        const hub = data.hub ?? {};
+        const queueSize = hub.queue_size ?? 0;
+        const ack = hub.last_ack ?? {};
+        const ackTxt = ack.command_id ? `ACK #${ack.command_id} (${ack.status ?? "?"})` : "sem ACK";
+        hubStatusEl.textContent = `Hub: fila=${queueSize} · ${ackTxt}`;
+
+        renderDynamicVars(data);
+        rawEl.textContent = JSON.stringify(data, null, 2);
+        drawChart();
+      };
+
+      const setActiveDevice = (device) => {
+        if (!device || !devices.has(device)) return;
+        activeDevice = device;
+        if (deviceSelectEl.value !== device) deviceSelectEl.value = device;
+        renderDeviceCards();
+        renderActive();
+      };
+
+      const upsertDevice = (data, appendPoint = true) => {
+        const device = (data.device ?? "unknown").toString().toLowerCase();
+        data.device = device;
+        devices.set(device, data);
+
+        if (!activeDevice) activeDevice = device;
+        ensurePoints(device);
+
+        if (appendPoint) {
+          const points = ensurePoints(device);
+          const point = Number(data.tds_ppm ?? data.value ?? 0);
+          if (Number.isFinite(point)) {
+            points.push(point);
+            if (points.length > MAX_POINTS) points.shift();
+          }
+        }
+
+        renderDeviceCards();
+        renderDeviceSelect();
+        if (activeDevice === device) renderActive();
+      };
+
+      const loadInitialSnapshot = async () => {
+        try {
+          const resp = await fetch("/api/telemetry/all");
+          const payload = await resp.json();
+          if (!resp.ok || !payload.ok) return;
+          Object.values(payload.devices ?? {}).forEach((item) => upsertDevice(item, true));
+          renderDeviceCards();
+          renderActive();
+        } catch {
+          // opcional
+        }
+      };
+
+      const sendCommand = async (action, value) => {
+        try {
+          const targetDevice = activeDevice ?? "esp32c6";
+          const resp = await fetch("/api/ui/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device: targetDevice, action, value }),
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data.ok) throw new Error(data.error || "erro ao enviar comando");
+          hubStatusEl.textContent = `Hub: comando #${data.command.id} enfileirado (${action})`;
+        } catch (err) {
+          hubStatusEl.textContent = `Hub: falha ao enviar comando (${String(err)})`;
+        }
+      };
+
+      deviceSelectEl.onchange = () => setActiveDevice(deviceSelectEl.value);
+      setReadModeBtn.onclick = () => sendCommand("set_read_mode", Number(readModeSelectEl.value));
+      setDisplayModeBtn.onclick = () => sendCommand("set_display_mode", Number(displayModeSelectEl.value));
+
+      calOnBtn.onclick = () => sendCommand("cal_on", null);
+      calSaveBtn.onclick = () => sendCommand("cal_save", null);
+      calResetBtn.onclick = () => sendCommand("cal_reset", null);
+      calOffBtn.onclick = () => sendCommand("cal_off", null);
+      calStatusBtn.onclick = () => sendCommand("cal_status", null);
+      calApplyPpmBtn.onclick = () => sendCommand("cal_apply_ppm", Number(calRefInputEl.value || 706.5));
+      calcAndApplyBtn.onclick = () => {
+        const us_cm = Number(ecInputEl.value || 1413);
+        const factor = Number(factorSelectEl.value || 0.5);
+        sendCommand("cal_apply_uscm", { us_cm, factor });
+      };
+      apply1413Btn.onclick = () => {
+        const factor = Number(factorSelectEl.value || 0.5);
+        sendCommand("cal_apply_uscm", { us_cm: 1413, factor });
+      };
+
+      ecInputEl.oninput = updateCalHint;
+      factorSelectEl.onchange = updateCalHint;
+
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://${location.host}/ws/view`);
+      ws.onopen = () => { dotEl.classList.add("ok"); connEl.textContent = "Conectado"; };
+      ws.onclose = () => { dotEl.classList.remove("ok"); connEl.textContent = "Desconectado"; };
+      ws.onmessage = (ev) => {
+        try { upsertDevice(JSON.parse(ev.data), true); } catch {}
+      };
+
+      loadInitialSnapshot();
+      updateCalHint();
+      setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send("ping"); }, 15000);
+    </script>
+  </body>
+</html>

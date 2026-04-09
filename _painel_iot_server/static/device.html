@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard de Dispositivo</title>
+    <style>
+      :root { color-scheme: dark; --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:Inter,system-ui,sans-serif; background:var(--bg); color:var(--text); }
+      .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px 24px; }
+      .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+      .card { background: color-mix(in hsl, var(--card), black 8%); border:1px solid #1f2937; border-radius:14px; padding:14px; }
+      .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+      .vars-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+      .label{font-size:12px;color:var(--muted);} .value{font-size:24px;font-weight:700;}
+      pre{font-size:12px;line-height:1.4;white-space:pre-wrap;word-break:break-word;margin:0;}
+      canvas { width:100%; height:240px; border-radius: 12px; background:#0b1220; border:1px solid #1f2937; }
+      button { background:#2563eb; color:white; border:none; border-radius:10px; padding:9px 12px; cursor:pointer; }
+      a { color:#60a5fa; text-decoration:none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+        <div>
+          <h1 id="title" style="margin:0">Dashboard do dispositivo</h1>
+          <div class="label">Projeto MaeDagua / Iara</div>
+        </div>
+        <div class="row">
+          <a href="/">Voltar ao painel geral</a>
+          <button id="refreshBtn">Atualizar</button>
+        </div>
+      </div>
+
+      <section class="grid">
+        <article class="card"><div class="label">Device</div><div class="value" id="device">-</div></article>
+        <article class="card"><div class="label">ID Pública</div><div class="value" id="publicId">-</div></article>
+        <article class="card"><div class="label">Modelo</div><div class="value" id="model">-</div></article>
+        <article class="card"><div class="label">Temp</div><div class="value" id="temp">--.- C</div></article>
+        <article class="card"><div class="label">TDS</div><div class="value" id="tds">0 ppm</div></article>
+        <article class="card"><div class="label">CAL</div><div class="value" id="cal">-</div></article>
+        <article class="card"><div class="label">CAL_GAIN</div><div class="value" id="calGain">-</div></article>
+        <article class="card"><div class="label">Último pacote</div><div class="value" id="lastSeen">-</div></article>
+      </section>
+
+      <div class="card" style="margin-top:10px;">
+        <div class="label" style="margin-bottom:8px">Série temporal (TDS)</div>
+        <canvas id="chart" width="1000" height="240"></canvas>
+      </div>
+
+      <div class="card" style="margin-top:10px;">
+        <div class="label" style="margin-bottom:8px">Variáveis detectadas automaticamente</div>
+        <section id="varsGrid" class="vars-grid"></section>
+      </div>
+
+      <div class="card" style="margin-top:10px;">
+        <div class="label" style="margin-bottom:8px">Logs e sinais (últimos eventos)</div>
+        <pre id="logs">[]</pre>
+      </div>
+    </div>
+
+    <script>
+      const pathParts = location.pathname.split('/').filter(Boolean);
+      const deviceId = decodeURIComponent(pathParts[pathParts.length - 1] || 'unknown').toLowerCase();
+      const chart = document.getElementById('chart');
+      const ctx = chart.getContext('2d');
+      const points = [];
+      const MAX_POINTS = 140;
+      const HIDDEN_KEYS = new Set([
+        'device','device_public_id','chip','counter','value','temp_c','tds_ppm','rssi','heap','uptime_ms',
+        'telemetry_interval_ms','hub','ts','vars','event','privacy','integration','modules','model','project','protocol'
+      ]);
+
+      const el = (id) => document.getElementById(id);
+      const formatTemp = (v) => (v === null || Number.isNaN(Number(v)) ? '--.- C' : `${Number(v).toFixed(1)} C`);
+
+      const draw = () => {
+        if (!ctx) return;
+        const w = chart.width, h = chart.height, pad = 20;
+        ctx.clearRect(0,0,w,h);
+        ctx.strokeStyle = '#1f2937';
+        for(let i=0;i<=4;i++){ const y=pad+((h-pad*2)*i)/4; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke(); }
+        if(points.length < 2) return;
+
+        let min = Math.min(...points), max = Math.max(...points);
+        if(min===max){min-=1;max+=1;}
+
+        const plotW = w-pad*2, plotH=h-pad*2, xStep=plotW/(MAX_POINTS-1);
+        ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2; ctx.beginPath();
+        points.forEach((v,i)=>{
+          const x=pad+i*xStep;
+          const y=pad+(1-(v-min)/(max-min))*plotH;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        });
+        ctx.stroke();
+      };
+
+      const renderDynamicVars = (device) => {
+        const varsGrid = el('varsGrid');
+        const vars = { ...(device.vars ?? {}) };
+        Object.entries(device).forEach(([k,v]) => {
+          if (!HIDDEN_KEYS.has(k) && !(k in vars)) vars[k] = v;
+        });
+        const entries = Object.entries(vars)
+          .filter(([k]) => !HIDDEN_KEYS.has(k))
+          .sort(([a],[b]) => a.localeCompare(b));
+
+        if(entries.length === 0){
+          varsGrid.innerHTML = `<div class="label">Nenhuma variável extra detectada.</div>`;
+          return;
+        }
+
+        varsGrid.innerHTML = entries.map(([k,v]) => `
+          <article class="card">
+            <div class="label">${k}</div>
+            <div class="value" style="font-size:20px">${v === null ? '-' : String(v)}</div>
+          </article>
+        `).join('');
+      };
+
+      const render = (device, logs) => {
+        document.title = `Dashboard ${device.device ?? deviceId}`;
+        el('title').textContent = `Dashboard: ${device.device ?? deviceId}`;
+        el('device').textContent = device.device ?? '-';
+        el('publicId').textContent = device.device_public_id ?? '-';
+        el('model').textContent = device.model ?? device.chip ?? '-';
+        el('temp').textContent = formatTemp(device.temp_c);
+        el('tds').textContent = `${Number(device.tds_ppm ?? device.value ?? 0).toFixed(1)} ppm`;
+
+        const cal = device.cal ?? device.vars?.cal;
+        const calGain = device.cal_gain ?? device.vars?.cal_gain;
+        el('cal').textContent = cal === undefined ? '-' : String(cal);
+        el('calGain').textContent = calGain === undefined ? '-' : Number(calGain).toFixed(4);
+
+        el('lastSeen').textContent = new Date((device.ts ?? Date.now()/1000) * 1000).toLocaleString();
+        renderDynamicVars(device);
+
+        const point = Number(device.tds_ppm ?? device.value ?? 0);
+        if(Number.isFinite(point)){ points.push(point); if(points.length > MAX_POINTS) points.shift(); draw(); }
+
+        if (logs) {
+          el('logs').textContent = JSON.stringify(logs, null, 2);
+        }
+      };
+
+      const load = async () => {
+        try {
+          const r = await fetch(`/api/device/${encodeURIComponent(deviceId)}/state`);
+          const data = await r.json();
+          if(!r.ok || !data.ok) return;
+          render(data.device, data.logs);
+        } catch {}
+      };
+
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/view`);
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if ((data.device ?? '').toLowerCase() === deviceId) {
+            render(data, null);
+          }
+        } catch {}
+      };
+
+      document.getElementById('refreshBtn').onclick = load;
+      load();
+      setInterval(load, 5000);
+    </script>
+  </body>
+</html>
