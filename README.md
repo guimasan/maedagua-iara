@@ -16,7 +16,7 @@ O repositório inclui firmware, backend de painel e dashboard web para uso local
 ## Estrutura do repositório
 
 - `firmware/iara_arduino_uno_v1.ino` — firmware do Arduino Uno
-- `_painel_iot_server/` — backend + dashboards locais
+- `iara_iot_server/` — backend + dashboards locais
 - `docs/index.html` — dashboard público (GitHub Pages)
 - `docs/USO_RAPIDO.md` — guia curto de operação
 - `tools/calibrar_tds.py` — calibração rápida via serial
@@ -26,7 +26,7 @@ O repositório inclui firmware, backend de painel e dashboard web para uso local
 
 1. O Arduino coleta dados dos sensores.
 2. A telemetria é enviada pela serial (`115200`).
-3. O bridge (`_painel_iot_server/bridge_arduino.py`) converte e publica para a API.
+3. O bridge (`iara_iot_server/bridge_arduino.py`) converte e publica para a API.
 4. Dashboards consomem API/WS para visualização em tempo real e histórico.
 
 Exemplo de payload serial:
@@ -122,7 +122,7 @@ Comandos para avaliar impacto de OLED e sequência de amostragem:
 2. Abrir monitor serial em `115200`.
 3. Validar chegada de telemetria.
 4. Opcional: executar scripts em `tools/` para diagnóstico/calibração.
-5. Subir backend em `_painel_iot_server` para dashboard local e integração web.
+5. Subir backend em `iara_iot_server` para dashboard local e integração web.
 
 ## Dashboard público (GitHub Pages)
 
