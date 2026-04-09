@@ -18,6 +18,7 @@ O repositório inclui firmware, backend de painel e dashboard web para uso local
 - `firmware/iara_arduino_uno_v1.ino` — firmware do Arduino Uno
 - `iara_iot_server/` — backend + dashboards locais
 - `docs/index.html` — dashboard público (GitHub Pages)
+- `cad/caixa_iara_v1.scad` — caixa 3D paramétrica (base + tampa)
 - `docs/USO_RAPIDO.md` — guia curto de operação
 - `tools/calibrar_tds.py` — calibração rápida via serial
 - `tools/diagnostico_leituras.py` — diagnóstico comparativo de modos
