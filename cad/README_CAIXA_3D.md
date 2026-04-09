@@ -5,6 +5,7 @@ Este diretório contém um modelo paramétrico em OpenSCAD para a caixa do siste
 ## Arquivo
 
 - `caixa_iara_v1.scad`
+- `caixa_iara_v1_ondas.scad` (versão alternativa estilizada)
 
 ## Arquivos prontos para impressão
 
@@ -12,8 +13,27 @@ Já renderizados neste projeto:
 
 - `cad/stl/caixa_iara_v1_base.stl`
 - `cad/stl/caixa_iara_v1_tampa.stl`
+- `cad/stl/caixa_iara_v1_ondas_base.stl`
+- `cad/stl/caixa_iara_v1_ondas_tampa.stl`
 
 Esses arquivos podem ser importados direto no slicer da sua impressora.
+
+## Versão alternativa estilizada (tema água)
+
+A versão `caixa_iara_v1_ondas.scad` foi desenhada com:
+
+- forma orgânica inspirada em pedra/onda (menos “caixa retangular”)
+- tampa com ranhuras decorativas em ondas
+- disposição interna para Arduino Uno + TDS + OLED 0.96"
+- berço interno para bateria Li-ion `18650`
+- saídas dos sensores na lateral direita
+- recorte para porta de carga da bateria na lateral traseira
+
+Para essa versão:
+
+- `part = "base"` exporta a base
+- `part = "lid"` exporta a tampa
+- `show_layout_helpers = true` mostra guias de layout no preview
 
 ## Componentes previstos
 
