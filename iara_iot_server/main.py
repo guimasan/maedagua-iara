@@ -25,33 +25,29 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-latest_data: dict[str, Any] = {
-    "device": "esp32c6",
-    "chip": "ESP32-C6",
-    "counter": 0,
-    "value": 0.0,
-    "rssi": 0,
-    "heap": 0,
-    "uptime_ms": 0,
-    "ip": "0.0.0.0",
-    "led_state": False,
-    "telemetry_interval_ms": 1000,
-    "hub": {
-        "queue_size": 0,
-        "last_ack": {},
-    },
-    "ts": time.time(),
+devices: dict[str, dict[str, Any]] = {
+    "esp32c6": {
+        "device": "esp32c6",
+        "device_public_id": "ESP32C6",
+        "chip": "ESP32-C6",
+        "counter": 0,
+        "value": 0.0,
+        "temp_c": None,
+        "tds_ppm": 0.0,
+        "uptime_ms": 0,
+        "project": "maedagua",
+        "protocol": "iara.v1.telemetry",
+        "privacy": "impersonal",
+        "hub": {"queue_size": 0, "last_ack": {}},
+        "ts": time.time(),
+    }
 }
-latest_by_device: dict[str, dict[str, Any]] = {
-    "esp32c6": dict(latest_data)
-}
-device_logs: dict[str, deque[dict[str, Any]]] = defaultdict(lambda: deque(maxlen=500))
+logs_by_device: dict[str, deque[dict[str, Any]]] = defaultdict(lambda: deque(maxlen=500))
+commands_by_device: dict[str, list[dict[str, Any]]] = defaultdict(list)
+last_ack_by_device: dict[str, dict[str, Any]] = defaultdict(dict)
 view_clients: set[WebSocket] = set()
 clients_lock = asyncio.Lock()
-
-device_commands: dict[str, list[dict[str, Any]]] = {}
 next_command_id = 1
-last_ack_by_device: dict[str, dict[str, Any]] = {}
 
 
 def _default_device_state(device: str) -> dict[str, Any]:
@@ -111,7 +107,7 @@ def _normalize_device(raw: Any) -> str:
 
 
 def _append_log(device: str, event: str, payload: dict[str, Any]) -> None:
-    device_logs[device].append(
+    logs_by_device[device].append(
         {
             "ts": time.time(),
             "event": event,
@@ -121,7 +117,7 @@ def _append_log(device: str, event: str, payload: dict[str, Any]) -> None:
 
 
 def _hub_snapshot(device: str) -> dict[str, Any]:
-    queue = device_commands.get(device, [])
+    queue = commands_by_device.get(device, [])
     pending = sum(1 for item in queue if item.get("status") in {"pending", "sent"})
     return {
         "queue_size": pending,
@@ -130,9 +126,9 @@ def _hub_snapshot(device: str) -> dict[str, Any]:
 
 
 def _ensure_device(device: str) -> dict[str, Any]:
-    if device not in latest_by_device:
-        latest_by_device[device] = _default_device_state(device)
-    return latest_by_device[device]
+    if device not in devices:
+        devices[device] = _default_device_state(device)
+    return devices[device]
 
 
 def _refresh_hub_for_device(device: str) -> None:
@@ -142,8 +138,6 @@ def _refresh_hub_for_device(device: str) -> None:
 
 @app.post("/api/telemetry")
 async def telemetry(request: Request) -> JSONResponse:
-    global latest_data, latest_by_device
-
     payload = await request.json()
     if not isinstance(payload, dict):
         return JSONResponse({"ok": False, "error": "JSON inválido"}, status_code=400)
@@ -156,8 +150,7 @@ async def telemetry(request: Request) -> JSONResponse:
     payload.setdefault("privacy", "impersonal")
     payload.setdefault("device_public_id", device.upper())
     payload["hub"] = _hub_snapshot(device)
-    latest_data = payload
-    latest_by_device[device] = payload
+    devices[device] = payload
     _append_log(device, "telemetry", payload)
 
     await _broadcast_to_viewers(payload)
@@ -167,16 +160,16 @@ async def telemetry(request: Request) -> JSONResponse:
 
 @app.get("/api/telemetry/all")
 async def telemetry_all() -> JSONResponse:
-    return JSONResponse({"ok": True, "devices": latest_by_device})
+    return JSONResponse({"ok": True, "devices": devices})
 
 
 @app.get("/api/devices")
 async def list_devices() -> JSONResponse:
-    devices: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     now = time.time()
-    for device, data in latest_by_device.items():
+    for device, data in devices.items():
         ts = float(data.get("ts", 0) or 0)
-        devices.append(
+        rows.append(
             {
                 "device": device,
                 "device_public_id": data.get("device_public_id", device.upper()),
@@ -191,21 +184,21 @@ async def list_devices() -> JSONResponse:
             }
         )
 
-    devices.sort(key=lambda d: d["device"])
-    return JSONResponse({"ok": True, "devices": devices})
+    rows.sort(key=lambda d: d["device"])
+    return JSONResponse({"ok": True, "devices": rows})
 
 
 @app.get("/api/device/{device_id}/state")
 async def device_state(device_id: str) -> JSONResponse:
     device = _normalize_device(device_id)
-    if device not in latest_by_device:
+    if device not in devices:
         return JSONResponse({"ok": False, "error": "Device não encontrado"}, status_code=404)
 
     return JSONResponse(
         {
             "ok": True,
-            "device": latest_by_device[device],
-            "logs": list(device_logs[device])[-120:],
+            "device": devices[device],
+            "logs": list(logs_by_device[device])[-120:],
         }
     )
 
@@ -213,11 +206,11 @@ async def device_state(device_id: str) -> JSONResponse:
 @app.get("/api/device/{device_id}/logs")
 async def device_logs_route(device_id: str, limit: int = 120) -> JSONResponse:
     device = _normalize_device(device_id)
-    if device not in latest_by_device:
+    if device not in devices:
         return JSONResponse({"ok": False, "error": "Device não encontrado"}, status_code=404)
 
     safe_limit = max(1, min(limit, 500))
-    return JSONResponse({"ok": True, "logs": list(device_logs[device])[-safe_limit:]})
+    return JSONResponse({"ok": True, "logs": list(logs_by_device[device])[-safe_limit:]})
 
 
 @app.post("/api/ui/command")
@@ -243,14 +236,14 @@ async def queue_command(request: Request) -> JSONResponse:
     }
     next_command_id += 1
 
-    queue = device_commands.setdefault(device, [])
+    queue = commands_by_device[device]
     queue.append(command)
     if len(queue) > 120:
-        device_commands[device] = queue[-120:]
+        commands_by_device[device] = queue[-120:]
 
     _refresh_hub_for_device(device)
     _append_log(device, "command_queued", command)
-    await _broadcast_to_viewers(latest_by_device[device])
+    await _broadcast_to_viewers(devices[device])
 
     return JSONResponse({"ok": True, "command": command})
 
@@ -258,7 +251,7 @@ async def queue_command(request: Request) -> JSONResponse:
 @app.get("/api/device/command")
 async def pull_command(device: str = "esp32c6") -> JSONResponse:
     normalized = _normalize_device(device)
-    queue = device_commands.setdefault(normalized, [])
+    queue = commands_by_device[normalized]
 
     for cmd in queue:
         if cmd.get("status") in {"pending", "sent"}:
@@ -280,7 +273,7 @@ async def ack_command(request: Request) -> JSONResponse:
     status = payload.get("status", "ok")
     message = payload.get("message", "")
 
-    queue = device_commands.setdefault(device, [])
+    queue = commands_by_device[device]
     target: dict[str, Any] | None = None
     for cmd in queue:
         if cmd.get("id") == command_id:
@@ -296,7 +289,7 @@ async def ack_command(request: Request) -> JSONResponse:
     target["ack_at"] = time.time()
 
     if len(queue) > 60:
-        device_commands[device] = queue[-60:]
+        commands_by_device[device] = queue[-60:]
 
     last_ack_by_device[device] = {
         "command_id": command_id,
@@ -315,7 +308,7 @@ async def ack_command(request: Request) -> JSONResponse:
             "message": message,
         },
     )
-    await _broadcast_to_viewers(latest_by_device[device])
+    await _broadcast_to_viewers(devices[device])
 
     return JSONResponse({"ok": True})
 
@@ -328,7 +321,11 @@ async def ws_view(websocket: WebSocket) -> None:
         view_clients.add(websocket)
 
     try:
-        await websocket.send_json(latest_data)
+        if devices:
+            newest = max(devices.values(), key=lambda d: float(d.get("ts", 0) or 0))
+            await websocket.send_json(newest)
+        else:
+            await websocket.send_json(_default_device_state("esp32c6"))
 
         while True:
             await websocket.receive_text()

@@ -208,6 +208,84 @@ def telemetry_base_url(full_telemetry_url: str) -> str:
     return full_telemetry_url.rstrip("/")
 
 
+def build_hello_payload(identity: dict[str, Any], counter: int) -> dict[str, Any]:
+    return {
+        "device": str(identity["device_public_id"]).lower(),
+        "device_public_id": identity["device_public_id"],
+        "project": identity["project"],
+        "protocol": identity["protocol"],
+        "chip": "Arduino Uno",
+        "model": identity["model"],
+        "fw_version": identity["fw"],
+        "modules": identity["modules"],
+        "counter": counter,
+        "value": 0.0,
+        "temp_c": None,
+        "tds_ppm": 0,
+        "privacy": "impersonal",
+        "integration": "independent",
+        "event": "hello",
+        "ts": time.time(),
+    }
+
+
+def build_telemetry_payload(identity: dict[str, Any], parsed: dict[str, Any], counter: int) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "device": str(identity["device_public_id"]).lower(),
+        "device_public_id": identity["device_public_id"],
+        "project": parsed.get("project", identity["project"]),
+        "protocol": parsed.get("protocol", identity["protocol"]),
+        "chip": "Arduino Uno",
+        "model": identity["model"],
+        "fw_version": identity["fw"],
+        "modules": identity["modules"],
+        "counter": counter,
+        "value": parsed.get("tds_ppm", 0),
+        "temp_c": parsed.get("temp_c"),
+        "tds_ppm": parsed.get("tds_ppm", 0),
+        "a1_v": parsed.get("a1_v", 0),
+        "privacy": "impersonal",
+        "integration": "independent",
+        "event": "telemetry",
+        "ts": time.time(),
+    }
+
+    fields = parsed.get("fields") if isinstance(parsed, dict) else None
+    if isinstance(fields, dict):
+        payload["vars"] = fields
+
+        reserved = {
+            "device",
+            "device_public_id",
+            "project",
+            "protocol",
+            "chip",
+            "model",
+            "fw",
+            "fw_version",
+            "modules",
+            "counter",
+            "value",
+            "temp_c",
+            "tds_ppm",
+            "a1_v",
+            "privacy",
+            "integration",
+            "event",
+            "ts",
+        }
+        for k, v in fields.items():
+            if k not in reserved:
+                payload[k] = v
+
+        if isinstance(fields.get("ts_ms"), (int, float)):
+            payload["uptime_ms"] = int(fields["ts_ms"])
+        if isinstance(fields.get("tds_v"), (int, float)):
+            payload["a1_v"] = float(fields["tds_v"])
+
+    return payload
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     load_env_file(root / ".env")
@@ -255,14 +333,20 @@ def main() -> None:
                         try:
                             cmd = pull_command(server_base, identity["device_public_id"])
                             if cmd:
-                                command_id = int(cmd.get("id"))
+                                command_id = cmd.get("id")
+                                if not isinstance(command_id, int):
+                                    try:
+                                        command_id = int(command_id)
+                                    except Exception:
+                                        command_id = None
+
                                 serial_cmd = map_action_to_serial(str(cmd.get("action", "")), cmd.get("value"), ec_to_ppm_factor)
-                                if serial_cmd:
+                                if serial_cmd and command_id is not None:
                                     ser.write((serial_cmd + "\n").encode("utf-8"))
                                     ser.flush()
                                     ack_command(server_base, identity["device_public_id"], command_id, "ok", f"serial:{serial_cmd}")
                                     print(f"[bridge] CMD #{command_id} -> {serial_cmd}")
-                                else:
+                                elif command_id is not None:
                                     ack_command(server_base, identity["device_public_id"], command_id, "error", "acao_nao_suportada")
                         except Exception as exc:
                             print(f"[bridge] erro ao processar comando do hub: {exc}")
@@ -289,24 +373,7 @@ def main() -> None:
                             }
                         )
 
-                        hello_payload: dict[str, Any] = {
-                            "device": identity["device_public_id"].lower(),
-                            "device_public_id": identity["device_public_id"],
-                            "project": identity["project"],
-                            "protocol": identity["protocol"],
-                            "chip": "Arduino Uno",
-                            "model": identity["model"],
-                            "fw_version": identity["fw"],
-                            "modules": identity["modules"],
-                            "counter": counter,
-                            "value": 0.0,
-                            "temp_c": None,
-                            "tds_ppm": 0,
-                            "privacy": "impersonal",
-                            "integration": "independent",
-                            "event": "hello",
-                            "ts": time.time(),
-                        }
+                        hello_payload = build_hello_payload(identity, counter)
 
                         try:
                             status = post_payload(server_url, hello_payload)
@@ -321,59 +388,7 @@ def main() -> None:
                     last_post_ms = now_ms
 
                     counter += 1
-                    payload: dict[str, Any] = {
-                        "device": str(identity["device_public_id"]).lower(),
-                        "device_public_id": identity["device_public_id"],
-                        "project": parsed.get("project", identity["project"]),
-                        "protocol": parsed.get("protocol", identity["protocol"]),
-                        "chip": "Arduino Uno",
-                        "model": identity["model"],
-                        "fw_version": identity["fw"],
-                        "modules": identity["modules"],
-                        "counter": counter,
-                        "value": parsed.get("tds_ppm", 0),
-                        "temp_c": parsed.get("temp_c"),
-                        "tds_ppm": parsed.get("tds_ppm", 0),
-                        "a1_v": parsed.get("a1_v", 0),
-                        "privacy": "impersonal",
-                        "integration": "independent",
-                        "event": "telemetry",
-                        "ts": time.time(),
-                    }
-
-                    fields = parsed.get("fields") if isinstance(parsed, dict) else None
-                    if isinstance(fields, dict):
-                        payload["vars"] = fields
-
-                        reserved = {
-                            "device",
-                            "device_public_id",
-                            "project",
-                            "protocol",
-                            "chip",
-                            "model",
-                            "fw",
-                            "fw_version",
-                            "modules",
-                            "counter",
-                            "value",
-                            "temp_c",
-                            "tds_ppm",
-                            "a1_v",
-                            "privacy",
-                            "integration",
-                            "event",
-                            "ts",
-                        }
-                        for k, v in fields.items():
-                            if k not in reserved:
-                                payload[k] = v
-
-                        if isinstance(fields.get("ts_ms"), (int, float)):
-                            payload["uptime_ms"] = int(fields["ts_ms"])
-
-                        if isinstance(fields.get("tds_v"), (int, float)):
-                            payload["a1_v"] = float(fields["tds_v"])
+                    payload = build_telemetry_payload(identity, parsed, counter)
 
                     try:
                         status = post_payload(server_url, payload)
